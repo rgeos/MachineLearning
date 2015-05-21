@@ -119,6 +119,7 @@ sum(diag(predMatrix))/sum(sum(predMatrix)) # wow 100% accuracy (overfitted???)
 
 Finally we will apply the model to the given test data set. All 20 answers were correctly predicted by our model, which proves that the random forest approach was a good choice.
 
+
 ```{r}
 answers = predict(fit, dataTest)
 answers
