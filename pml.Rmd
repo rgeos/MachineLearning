@@ -1,0 +1,125 @@
+---
+title: "Practical Machine Learning - assignment"
+author: "rgeos"
+date: "May 20, 2015"
+output: html_document
+keep_md: true
+---
+
+```{r setoptions, echo = FALSE, warning=FALSE, message=FALSE}
+library(caret)
+library(randomForest)
+library(corrplot)
+```
+## 1. Description
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively.  
+
+This document will describe the analysis performed on a dataset containing 5 classes of physical exercises collected over a period of 8 hours for multiple subjects. Details of the experiment can be found at [this link](http://groupware.les.inf.puc-rio.br/har).  
+
+We will first load the data locally and clean it up of invalid observation. The data is composed of:  
+  - Training set [dataTrain](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv): 70% of which will be used to create the model and 30% will be used for testing the model before applying it to the given testing set  
+  - Testing set [dataTest](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv)  
+
+We will apply a "RandomForest" method to build our prediction. At the end we will run the model on the testing set.
+
+## 2. Preparation
+
+
+
+### 2.1. Set working directory
+
+I will comment out the following command since this may not work for you as it does for me. Please change the directory name to fit your needs and comment out the line.
+
+```{r}
+# setwd("MachineLearning/")
+```
+
+### 2.2. (Down)Load the data
+
+We assume that the files are already in their working directory, if not, comment out the following 2 download commands.
+
+```{r}
+# download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",  destfile = "pml-training.csv",  method = "curl")
+# download.file(url = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "pml-testing.csv", method = "curl")
+```
+
+Loading the data in memory.
+```{r cache=TRUE}
+dataTrain = read.csv("pml-training.csv", na.strings = c("", "NA", "N/A", "#DIV/0!"))
+dim(dataTrain)
+dataTest  = read.csv("pml-testing.csv", na.strings = c("", "NA", "N/A", "#DIV/0!"))
+```
+
+### 2.3. Data cleanup
+
+There are some invalid observations, such as `NA` or `#DIV/0` which shall be removed. Also, the first 7 variables are not needed in our analysis, so they will be removed.
+
+```{r cache=TRUE}
+dataTrain = (dataTrain[,colSums(is.na(dataTrain)) == 0])[,-c(1:7)]
+dim(dataTrain)
+```
+
+Before building the model we need to find the variables with the highest correlation and remove the columns in oreder to reduce the pair-wise correlations. After the cleanup of the data, only 53 predictors (variables) are left and 19622 observations.
+
+```{r cache=TRUE}
+corMatrix = abs(cor(dataTrain[,-53]))
+diag(corMatrix) = 0
+which(corMatrix > .95, arr.ind = T)
+```
+
+Building a correlation plot
+```{r}
+corrplot(corMatrix, tl.pos = "ld", type = "lower", method = "shade")
+```
+
+Now remove columns for reducing pair-wise correlations. After this removal we will be left with only 46 predictors while number of observations remain the same, 19622.
+
+```{r cache=TRUE}
+dataTrain = dataTrain[,-c(findCorrelation(corMatrix))]
+dim(dataTrain)
+```
+
+## 3. Building a model
+
+### 3.1. Slice the data
+
+First we will slice the data in 70/30 train/test data set. This step is needed in order to train our model and then test it against the remaining 30% of the data to see how it performs. Ideally the model will get close to 100% at predicting.
+
+```{r cache=TRUE}
+set.seed(1234)
+partition = createDataPartition(dataTrain$classe, p = .7, list = F)
+dataTrain_training  = dataTrain[partition, ]
+dataTrain_testing   = dataTrain[-partition, ]
+```
+
+### 3.2. Random Forest
+
+We will use random forest as method for classification to build our model since it is a very popular method for machine learning. Also, for reproducibility we will use the seed `1234`.
+
+```{r cache=TRUE}
+set.seed(1234)
+fit = randomForest(formula = classe ~ ., data = dataTrain_testing)
+fit
+```
+
+
+### 3.3. Predict
+
+Our model has 500 trees and an estimated error rate of 1.6% (not that bad). We will apply this model to our testing data set.
+
+```{r}
+pred = predict(fit, dataTrain_testing)
+predMatrix = table(pred, dataTrain_testing$classe)
+predMatrix
+sum(diag(predMatrix))/sum(sum(predMatrix)) # wow 100% accuracy (overfitted???)
+```
+
+## 4. Answers
+
+Finally we will apply the model to the given test data set. All 20 answers were correctly predicted by our model, which proves that the random forest approach was a good choice.
+
+```{r}
+answers = predict(fit, dataTest)
+answers
+```
